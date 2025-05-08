@@ -4,7 +4,15 @@ import { useStore } from '../store/useStore';
 import { Calendar, Clock, CheckCircle, XCircle, Clock3, Trash2, Edit2 } from 'lucide-react';
 
 export const MyReservations: React.FC = () => {
-  const { user, myReservations, cancelReservation, setSelectedClassroom, setSelectedDate } = useStore();
+  const { 
+    user, 
+    myReservations, 
+    cancelReservation, 
+    setSelectedClassroom, 
+    setSelectedDate,
+    setReservationTimes,
+    setEditingReservation
+  } = useStore();
 
   if (!user) {
     return (
@@ -28,20 +36,26 @@ export const MyReservations: React.FC = () => {
   };
 
   const handleEditReservation = (reservation: any) => {
+    // 상태 설정
     setSelectedClassroom(reservation.classroom);
     setSelectedDate(new Date(reservation.start_time));
-    // 예약 수정 페이지로 이동
-    const scheduleElement = document.querySelector('.lg\\:col-span-2');
-    if (scheduleElement) {
-      scheduleElement.scrollIntoView({ behavior: 'smooth' });
-      // Add a small delay to ensure the timetable is rendered
-      setTimeout(() => {
-        const weekSelector = document.querySelector('.ClassroomSchedule');
-        if (weekSelector) {
-          weekSelector.scrollIntoView({ behavior: 'smooth' });
-        }
-      }, 100);
-    }
+    const startTime = format(parseISO(reservation.start_time), 'HH:mm');
+    const endTime = format(parseISO(reservation.end_time), 'HH:mm');
+    setReservationTimes(startTime, endTime);
+    setEditingReservation(reservation);
+
+    // App.tsx의 showMyReservations를 false로 설정하기 위해 이벤트 디스패치
+    window.dispatchEvent(new CustomEvent('toggleMyReservations', { detail: false }));
+
+    // ClassroomSchedule로 스크롤
+    setTimeout(() => {
+      const scheduleElement = document.querySelector('.ClassroomSchedule');
+      if (scheduleElement) {
+        scheduleElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        console.warn('ClassroomSchedule 요소를 찾을 수 없습니다.');
+      }
+    }, 300); // 상태 변경 후 DOM 업데이트를 기다림
   };
 
   return (

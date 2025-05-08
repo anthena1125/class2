@@ -18,10 +18,11 @@ export const ReservationForm: React.FC = () => {
     selectedStartTime,
     selectedEndTime,
     clearReservationTimes,
-    setSelectedClassroom
+    setSelectedClassroom,
+    editingReservation,
+    setEditingReservation
   } = useStore();
 
-  const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     startTime: '',
@@ -30,6 +31,7 @@ export const ReservationForm: React.FC = () => {
     attendees: '',
   });
 
+  // 편집 모드 초기화
   useEffect(() => {
     if (editingReservation) {
       const startDate = new Date(editingReservation.start_time);
@@ -42,20 +44,21 @@ export const ReservationForm: React.FC = () => {
         purpose: editingReservation.purpose,
         attendees: editingReservation.purpose.split('참석인원:')[1]?.trim() || '',
       });
-
       setSelectedDate(startDate);
       clearReservationTimes();
     }
   }, [editingReservation]);
 
-  // Update form when selectedDate or selectedTimes change
+  // ClassroomSchedule에서 선택한 시간 반영
   useEffect(() => {
+    console.log(`ReservationForm useEffect - Date: ${selectedDate}, Start: ${selectedStartTime}, End: ${selectedEndTime}`);
     if (selectedDate && selectedStartTime) {
+      const endTime = selectedEndTime || `${(parseInt(selectedStartTime.split(':')[0]) + 1).toString().padStart(2, '0')}:00`;
       setFormData(prev => ({
         ...prev,
         date: format(selectedDate, 'yyyy-MM-dd'),
         startTime: selectedStartTime,
-        endTime: selectedEndTime || '',
+        endTime: endTime,
       }));
     }
   }, [selectedDate, selectedStartTime, selectedEndTime]);
@@ -168,27 +171,28 @@ export const ReservationForm: React.FC = () => {
     }
   };
 
-  const handleEditReservation = (reservation: Reservation) => {
-    // First set the classroom to trigger the schedule loading
+  const handleEditReservation = (reservation: any) => {
     setSelectedClassroom(reservation.classroom);
-    
-    // Then set the editing state and date
-    setEditingReservation(reservation);
     setSelectedDate(new Date(reservation.start_time));
-    
-    // Scroll to the timetable after a short delay to ensure it's rendered
+    const startTime = format(parseISO(reservation.start_time), 'HH:mm');
+    const endTime = format(parseISO(reservation.end_time), 'HH:mm');
+    setReservationTimes(startTime, endTime);
+    setEditingReservation(reservation);
+
     setTimeout(() => {
       const scheduleElement = document.querySelector('.ClassroomSchedule');
       if (scheduleElement) {
-        scheduleElement.scrollIntoView({ behavior: 'smooth' });
+        scheduleElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        console.warn('ClassroomSchedule 요소를 찾을 수 없습니다.');
       }
-    }, 100);
+    }, 300);
   };
 
   const minAttendees = Math.ceil(selectedClassroom.capacity / 3);
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white rounded-lg shadow-md p-6 ReservationForm">
       <h2 className="text-xl font-semibold mb-6">
         {editingReservation ? '예약 수정하기' : '강의실 예약하기'}
       </h2>
@@ -302,6 +306,7 @@ export const ReservationForm: React.FC = () => {
         )}
       </form>
 
+      {/* 최근 예약 내역 추가 */}
       {!editingReservation && myReservations.length > 0 && (
         <div className="mt-6">
           <h3 className="text-lg font-semibold mb-3">최근 예약 내역</h3>
@@ -319,6 +324,7 @@ export const ReservationForm: React.FC = () => {
                   <button
                     onClick={() => handleEditReservation(reservation)}
                     className="text-blue-600 hover:text-blue-800"
+                    title="예약 수정"
                   >
                     <Edit2 size={18} />
                   </button>

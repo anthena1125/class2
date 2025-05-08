@@ -14,20 +14,28 @@ export const ClassroomSchedule: React.FC = () => {
     setSelectedDate,
     setReservationTimes,
     clearReservationTimes,
+    selectedDate,
     selectedStartTime,
     selectedEndTime,
-    selectedDate
   } = useStore();
 
   const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [weekReservations, setWeekReservations] = useState<Record<string, any[]>>({});
+  const [localSelectedDate, setLocalSelectedDate] = useState<Date | null>(null);
+  const [localStartTime, setLocalStartTime] = useState<string | null>(null);
+  const [localEndTime, setLocalEndTime] = useState<string | null>(null);
 
+  // 전역 상태와 로컬 상태 동기화 (편집 모드 지원)
   useEffect(() => {
-    if (selectedDate) {
-      setCurrentWeek(startOfWeek(selectedDate, { weekStartsOn: 1 }));
+    if (selectedDate && selectedStartTime && selectedEndTime) {
+      setLocalSelectedDate(selectedDate);
+      setLocalStartTime(selectedStartTime);
+      setLocalEndTime(selectedEndTime);
+      setCurrentWeek(startOfWeek(selectedDate, { weekStartsOn: 1 })); // 선택된 날짜의 주로 이동
     }
-  }, [selectedDate]);
+  }, [selectedDate, selectedStartTime, selectedEndTime]);
 
+  // 주간 예약 정보 가져오기
   useEffect(() => {
     if (selectedClassroom) {
       const fetchWeekReservations = async () => {
@@ -39,14 +47,16 @@ export const ClassroomSchedule: React.FC = () => {
           newWeekReservations[dateStr] = reservations;
         }
         setWeekReservations(newWeekReservations);
+        console.log('Week reservations updated:', Object.keys(newWeekReservations));
       };
       fetchWeekReservations();
     }
   }, [currentWeek, selectedClassroom]);
 
+  // 상태 업데이트 로그
   useEffect(() => {
-    clearReservationTimes();
-  }, [currentWeek]);
+    console.log(`State updated - Local Start: ${localStartTime}, End: ${localEndTime}`);
+  }, [localStartTime, localEndTime]);
 
   if (!selectedClassroom) return null;
 
@@ -90,43 +100,92 @@ export const ClassroomSchedule: React.FC = () => {
   const handleTimeSlotClick = (date: Date, hour: number) => {
     const timeStr = `${hour.toString().padStart(2, '0')}:00`;
     const dateStr = format(date, 'yyyy-MM-dd');
+    const isSameDate = localSelectedDate && format(localSelectedDate, 'yyyy-MM-dd') === dateStr;
 
-    const startHour = selectedStartTime ? parseInt(selectedStartTime.split(':')[0]) : null;
-    const isSameDate = selectedDate && format(selectedDate, 'yyyy-MM-dd') === dateStr;
-    const isAlreadySelected = isSameDate && startHour === hour;
+    console.log(`Clicked: ${timeStr} on ${dateStr}`);
 
-    if (isAlreadySelected) {
-      clearReservationTimes();
-      console.log('Selection cleared');
-      return;
+    if (!localStartTime) {
+      // 첫 클릭: 1시간 단위 설정
+      if (!isTimeSlotAvailable(date, hour)) {
+        alert('선택할 수 없는 시간입니다.');
+        return;
+      }
+      const endTimeStr = `${(hour + 1).toString().padStart(2, '0')}:00`;
+      setLocalSelectedDate(date);
+      setLocalStartTime(timeStr);
+      setLocalEndTime(endTimeStr);
+      setSelectedDate(date);
+      setReservationTimes(timeStr, endTimeStr);
+      console.log(`1-hour selected: ${timeStr} - ${endTimeStr}`);
+    } else if (isSameDate) {
+      const startHour = parseInt(localStartTime.split(':')[0]);
+      const currentEndHour = parseInt(localEndTime.split(':')[0]);
+      const duration = currentEndHour - startHour;
+      const isWithinSelection = hour >= startHour && hour < currentEndHour;
+
+      console.log(`Current selection: ${localStartTime} - ${localEndTime}, Duration: ${duration}`);
+
+      if (isWithinSelection) {
+        // 선택된 시간대 클릭: 취소
+        setLocalStartTime(null);
+        setLocalEndTime(null);
+        setLocalSelectedDate(null);
+        clearReservationTimes();
+        console.log('Selection cleared');
+        return;
+      }
+
+      if (hour === currentEndHour && duration < 2) {
+        // 다음 시간대 클릭: 2시간으로 확장
+        if (!isTimeSlotAvailable(date, hour)) {
+          alert('선택할 수 없는 시간입니다.');
+          return;
+        }
+        const newEndTimeStr = `${(hour + 1).toString().padStart(2, '0')}:00`;
+        setLocalEndTime(newEndTimeStr);
+        setReservationTimes(localStartTime, newEndTimeStr);
+        console.log(`Extended to 2-hour: ${localStartTime} - ${newEndTimeStr}`);
+      } else if (hour !== startHour) {
+        // 다른 시간대 클릭: 새 1시간 설정
+        if (!isTimeSlotAvailable(date, hour)) {
+          alert('선택할 수 없는 시간입니다.');
+          return;
+        }
+        const newEndTimeStr = `${(hour + 1).toString().padStart(2, '0')}:00`;
+        setLocalStartTime(timeStr);
+        setLocalEndTime(newEndTimeStr);
+        setReservationTimes(timeStr, newEndTimeStr);
+        console.log(`Reset to new 1-hour: ${timeStr} - ${newEndTimeStr}`);
+      }
+    } else {
+      // 다른 날짜 클릭: 새 1시간 설정
+      if (!isTimeSlotAvailable(date, hour)) {
+        alert('선택할 수 없는 시간입니다.');
+        return;
+      }
+      const endTimeStr = `${(hour + 1).toString().padStart(2, '0')}:00`;
+      setLocalSelectedDate(date);
+      setLocalStartTime(timeStr);
+      setLocalEndTime(endTimeStr);
+      setSelectedDate(date);
+      setReservationTimes(timeStr, endTimeStr);
+      console.log(`New 1-hour selected: ${timeStr} - ${endTimeStr}`);
     }
-
-    if (!isTimeSlotAvailable(date, hour)) {
-      alert('선택할 수 없는 시간입니다.');
-      return;
-    }
-    if (!isTimeSlotAvailable(date, hour + 1)) {
-      alert('2시간 연속 예약이 불가능합니다.');
-      return;
-    }
-
-    setSelectedDate(date);
-    const endTimeStr = `${(hour + 2).toString().padStart(2, '0')}:00`;
-    setReservationTimes(timeStr, endTimeStr);
-    console.log(`Selected: ${timeStr} - ${endTimeStr}`);
   };
 
   const isTimeSlotSelected = (date: Date, hour: number) => {
-    if (!selectedStartTime || !selectedDate) return false;
+    if (!localStartTime || !localSelectedDate) return false;
 
     const dateStr = format(date, 'yyyy-MM-dd');
-    const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+    const selectedDateStr = format(localSelectedDate, 'yyyy-MM-dd');
     if (dateStr !== selectedDateStr) return false;
 
-    const startHour = parseInt(selectedStartTime.split(':')[0]);
-    const endHour = selectedEndTime ? parseInt(selectedEndTime.split(':')[0]) : startHour + 2;
+    const startHour = parseInt(localStartTime.split(':')[0]);
+    const endHour = localEndTime ? parseInt(localEndTime.split(':')[0]) : startHour + 1;
 
-    return hour >= startHour && hour < endHour;
+    const isSelected = hour >= startHour && hour < endHour;
+    console.log(`Checking ${dateStr} ${hour}:00 - Start: ${startHour}, End: ${endHour}, Selected: ${isSelected}`);
+    return isSelected;
   };
 
   return (
@@ -205,9 +264,9 @@ export const ClassroomSchedule: React.FC = () => {
                           transition-all duration-200 ease-in-out
                           ${regularClass ? 'bg-gray-200 cursor-not-allowed' : ''}
                           ${reservation ? 'bg-red-100 cursor-not-allowed' : ''}
-                          ${isSelected ? 'bg-blue-500 text-white hover:bg-blue-600' : ''} // 강한 색상으로 테스트
-                          ${!isAvailable && !regularClass && !reservation && !isSelected ? 'bg-gray-100 cursor-not-allowed' : ''}
+                          ${isSelected ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}
                           ${isAvailable && !regularClass && !reservation && !isSelected ? 'bg-green-100 hover:bg-green-200' : ''}
+                          ${!isAvailable && !regularClass && !reservation && !isSelected ? 'bg-gray-100 cursor-not-allowed' : ''}
                         `}
                       >
                         {regularClass && (
@@ -245,8 +304,9 @@ export const ClassroomSchedule: React.FC = () => {
       </div>
       <div className="mt-4 space-y-2 text-sm text-gray-600">
         <p>시간표를 클릭하여 예약 시간을 선택할 수 있습니다.</p>
-        <p>• 첫 번째 클릭: 시작 시간 선택 (자동 2시간 블록)</p>
-        <p>• 같은 시간대를 다시 클릭하면 선택이 취소됩니다.</p>
+        <p>• 첫 번째 클릭: 1시간 단위 선택 (예: 12:00 → 12:00-13:00)</p>
+        <p>• 두 번째 클릭: 다음 시간대로 확장 (최대 2시간, 예: 13:00 → 12:00-14:00)</p>
+        <p>• 선택된 시간대를 클릭하면 취소됩니다.</p>
       </div>
     </div>
   );

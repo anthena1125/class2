@@ -29,10 +29,12 @@ interface Store {
   fetchRegularClasses: (classroomId: string) => Promise<void>;
   fetchMyReservations: () => Promise<void>;
   createReservation: (reservationData: Omit<Reservation, 'id' | 'user_id' | 'created_at'>) => Promise<void>;
-  updateReservation: (id: string, reservationData: Omit<Reservation, 'id' | 'user_id' | 'created_at'>) => Promise<void>;
+  updateReservation: (id: string, reservationData: omit<Reservation, 'id' | 'user_id' | 'created_at'>) => Promise<void>;
   cancelReservation: (id: string) => Promise<void>;
   addRegularClass: (classData: Omit<RegularClass, 'id'>) => Promise<void>;
   deleteRegularClass: (id: string) => Promise<void>;
+  editingReservation: Reservation | null;
+  setEditingReservation: (reservation: Reservation | null) => void;
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -47,6 +49,8 @@ export const useStore = create<Store>((set, get) => ({
   selectedDate: new Date(),
   selectedStartTime: null,
   selectedEndTime: null,
+  editingReservation: null,
+  setEditingReservation: (reservation) => set({ editingReservation: reservation }),
   
   setUser: (user) => {
     set({ user });
@@ -84,10 +88,10 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  setReservationTimes: (startTime, endTime) => set({ 
-    selectedStartTime: startTime, 
-    selectedEndTime: endTime 
-  }),
+  setReservationTimes: (startTime, endTime) => {
+    console.log(`useStore setReservationTimes - Start: ${startTime}, End: ${endTime}`);
+    set({ selectedStartTime: startTime, selectedEndTime: endTime });
+  },
 
   clearReservationTimes: () => set({ 
     selectedStartTime: null, 
@@ -196,14 +200,12 @@ export const useStore = create<Store>((set, get) => ({
       throw new Error('강의실을 선택해주세요.');
     }
 
-    // Check minimum attendees (1/3 of capacity)
     const minAttendees = Math.ceil(selectedClassroom.capacity / 3);
     const attendees = parseInt(reservationData.purpose.split('참석인원:')[1]?.trim() || '0');
     if (attendees < minAttendees) {
       throw new Error(`최소 ${minAttendees}명 이상의 참석자가 필요합니다.`);
     }
 
-    // Check if reservation is within 2 hours
     const startTime = new Date(reservationData.start_time);
     const endTime = new Date(reservationData.end_time);
     const hours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
@@ -234,14 +236,12 @@ export const useStore = create<Store>((set, get) => ({
       throw new Error('강의실을 선택해주세요.');
     }
 
-    // Check minimum attendees (1/3 of capacity)
     const minAttendees = Math.ceil(selectedClassroom.capacity / 3);
     const attendees = parseInt(reservationData.purpose.split('참석인원:')[1]?.trim() || '0');
     if (attendees < minAttendees) {
       throw new Error(`최소 ${minAttendees}명 이상의 참석자가 필요합니다.`);
     }
 
-    // Check if reservation is within 2 hours
     const startTime = new Date(reservationData.start_time);
     const endTime = new Date(reservationData.end_time);
     const hours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);

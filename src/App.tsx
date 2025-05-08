@@ -27,7 +27,16 @@ function App() {
       setUser(session?.user ?? null);
     });
 
-    return () => subscription.unsubscribe();
+    // 커스텀 이벤트 리스너 추가
+    const handleToggleMyReservations = (event: CustomEvent) => {
+      setShowMyReservations(event.detail);
+    };
+    window.addEventListener('toggleMyReservations', handleToggleMyReservations as EventListener);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('toggleMyReservations', handleToggleMyReservations as EventListener);
+    };
   }, []);
 
   const handleSignOut = async () => {
